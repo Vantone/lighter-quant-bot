@@ -23,7 +23,7 @@ RUN pip install --no-cache-dir lighter-sdk && \
     cp /usr/local/lib/python3.12/site-packages/lighter/signers/lighter-signer-linux-arm64.so /tmp/lighter-signer.so
 
 # ── Stage 3: Runtime image ──
-FROM debian:bookworm-slim
+# FROM debian:bookworm-slim
 FROM ubuntu:24.04
 
 RUN apt-get update && apt-get install -y \
