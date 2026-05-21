@@ -4,7 +4,8 @@
 # ═══════════════════════════════════════════════════════
 
 # ── Stage 1: Build the Rust binary ──
-FROM rust:1.83-bookworm AS builder
+# FROM rust:1.83-bookworm AS builder
+FROM rust:latest AS builder
 
 WORKDIR /usr/src/app
 COPY Cargo.toml Cargo.lock ./
@@ -27,6 +28,7 @@ FROM debian:bookworm-slim
 RUN apt-get update && apt-get install -y \
     ca-certificates \
     libssl3 \
+    pkg-config \
     && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /app
