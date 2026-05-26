@@ -793,9 +793,15 @@ impl LighterClient {
     #[allow(dead_code)]
     pub async fn cancel_all_orders(&self, _symbol: &str) -> Result<(), LighterError> {
         let nonce = self.next_nonce().await?;
+        info!("Cancelling all orders: nonce={}", nonce);
         let (tx_type, tx_info) = ffi::sign_cancel_all_orders(nonce)?;
-        self.send_tx(tx_type, &tx_info).await?;
-        Ok(())
+        match self.send_tx(tx_type, &tx_info).await {
+            Ok(_) => Ok(()),
+            Err(e) => {
+                let _ = self.refresh_nonce().await;
+                Err(e)
+            }
+        }
     }
 
     /// Get positions (via account info)
