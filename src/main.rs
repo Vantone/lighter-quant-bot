@@ -1510,27 +1510,46 @@ async fn download_data(
         other => anyhow::bail!("Unsupported interval: {}", other),
     };
 
-    let span_secs = (end - start).num_seconds().max(secs_per_candle as i64);
-    let count_back = ((span_secs / secs_per_candle as i64) + 8) as u32;
-
     let client = lighter::client::LighterClient::new(
         "",
         "",
         "https://mainnet.zklighter.elliot.ai",
         "wss://mainnet.zklighter.elliot.ai/stream",
     );
-    let mut candles = client
-        .get_candlesticks_in_range(
-            market_id,
-            interval,
-            start.timestamp(),
-            end.timestamp(),
-            count_back,
-        )
-        .await
-        .context("Failed to download candlestick data")?;
+
+    let mut candles = Vec::new();
+    let max_candles_per_request = 450_i64;
+    let chunk_span = chrono::Duration::seconds(secs_per_candle as i64 * max_candles_per_request);
+    let mut chunk_start = start;
+
+    while chunk_start <= end {
+        let chunk_end = (chunk_start + chunk_span).min(end);
+        let span_secs = (chunk_end - chunk_start).num_seconds().max(secs_per_candle as i64);
+        let count_back = ((span_secs / secs_per_candle as i64) + 8) as u32;
+
+        let mut chunk = client
+            .get_candlesticks_in_range(
+                market_id,
+                interval,
+                chunk_start.timestamp(),
+                chunk_end.timestamp(),
+                count_back,
+            )
+            .await
+            .with_context(|| {
+                format!(
+                    "Failed to download candlestick data chunk {} -> {}",
+                    chunk_start, chunk_end
+                )
+            })?;
+
+        candles.append(&mut chunk);
+        chunk_start = chunk_end + chrono::Duration::seconds(secs_per_candle as i64);
+    }
 
     candles.retain(|c| c.timestamp >= start && c.timestamp <= end);
+    candles.sort_by_key(|c| c.timestamp);
+    candles.dedup_by_key(|c| c.timestamp);
     if candles.is_empty() {
         anyhow::bail!("No candles returned for {} {} {} {}", symbol, interval, start_date, end_date);
     }
