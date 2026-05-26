@@ -463,6 +463,28 @@ async fn run_live_trading(config_path: &str) -> Result<()> {
                         let rm = risk_manager_refresh.lock().await;
                         rm.is_emergency_triggered()
                     };
+
+                    if count > max_open_orders && !is_emergency {
+                        warn!("⚠️ Open orders {} exceed limit {}, cancelling all and resetting grid",
+                            count, max_open_orders);
+                        grid_resetting_refresh.store(true, std::sync::atomic::Ordering::Relaxed);
+                        match client_for_refresh.cancel_all_orders("all").await {
+                            Ok(()) => {
+                                strategy_refresh.read().await.clear_filled_state();
+                                let _ = client_for_refresh.refresh_nonce().await;
+                                tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+                                open_orders_refresh.store(0, std::sync::atomic::Ordering::Relaxed);
+                                at_max_since = None;
+                                let mut ds = dash_state_refresh.write().await;
+                                ds.open_orders = 0;
+                                ds.open_orders_list.clear();
+                            }
+                            Err(e) => warn!("❌ Over-limit cancel-all failed: {}", e),
+                        }
+                        grid_resetting_refresh.store(false, std::sync::atomic::Ordering::Relaxed);
+                        continue;
+                    }
+
                     if count > 0 && !is_emergency {
                         // Get fresh market prices
                         let mut mid_prices: std::collections::HashMap<u32, f64> = std::collections::HashMap::new();
@@ -1020,6 +1042,38 @@ async fn run_live_trading(config_path: &str) -> Result<()> {
                         info!("⏸️ Max open orders ({}/{}) reached, skipping signal: {} {:?}",
                             current_open, max_open_orders, signal.symbol, signal.side);
                         continue;
+                    }
+
+                    // Refresh real exchange-side open orders before placing a new order.
+                    // The background counter can lag behind fast signal bursts or manual orders.
+                    match lighter_client.get_open_orders("all").await {
+                        Ok(real_orders) => {
+                            let real_open = real_orders.len() as u32;
+                            open_orders_count.store(real_open, std::sync::atomic::Ordering::Relaxed);
+                            {
+                                let mut ds = dash_state.write().await;
+                                ds.open_orders = real_open;
+                                ds.open_orders_list = real_orders.iter().map(|o| serde_json::json!({
+                                    "id": o.id,
+                                    "symbol": o.symbol,
+                                    "side": format!("{:?}", o.side),
+                                    "price": o.price,
+                                    "quantity": o.quantity,
+                                    "filled_quantity": o.filled_quantity,
+                                    "status": format!("{:?}", o.status),
+                                })).collect();
+                            }
+
+                            if real_open >= max_open_orders {
+                                info!("⏸️ Real open orders ({}/{}) reached, skipping signal: {} {:?}",
+                                    real_open, max_open_orders, signal.symbol, signal.side);
+                                continue;
+                            }
+                        }
+                        Err(e) => {
+                            warn!("⚠️ Failed to refresh open orders before placement: {}", e);
+                            continue;
+                        }
                     }
 
                     // Wait if grid is being reset (prevents nonce race)
