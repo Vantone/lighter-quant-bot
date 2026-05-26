@@ -178,6 +178,21 @@ docker compose build       # 重新构建
 - 定期检查 Dashboard 监控交易状态和盈亏情况
 - 私钥和 API Key 请妥善保管，不要提交到公开仓库
 
-## 📄 License
+## 数据回测
 
+
+
+```bash
+# 下载数据
+cargo +stable-x86_64-pc-windows-msvc run -- download --symbol BTC --interval 1h --start 2026-03-26 --end 2026-05-26
+
+# 自动回测
+cargo +stable-x86_64-pc-windows-msvc run -- optimize  --strategy grid --data backtests/data/BTC-1h-20260326-20260526.csv --start 2026-03-26 --end 2026-05-26  --capital 10000 --output backtests/results
+
+# 数据回测
+cargo +stable-x86_64-pc-windows-msvc  run -- backtest --strategy grid  --data backtests/data/BTC-1h-20260326-20260526.csv --start 2026-03-26 --end 2026-05-26 --capital 10000 --params "grid_count=10,investment=30,deviation=0.01" 
+`
+
+
+## 📄 License
 MIT
