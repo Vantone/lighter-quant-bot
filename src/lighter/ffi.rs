@@ -31,8 +31,8 @@ struct SignerLib {
         c_int, c_longlong, c_longlong, c_int, c_int, c_int, c_int, c_int, c_int,
         c_longlong, c_longlong, c_int, c_int, c_int, c_longlong, c_int, c_longlong,
     ) -> SignedTxResponse,
-    sign_cancel_order: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
-    sign_cancel_all_orders: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
+    sign_cancel_order: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
+    sign_cancel_all_orders: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
     create_auth_token: unsafe extern "C" fn(c_longlong, c_int, c_longlong) -> StrOrErr,
     free_fn: unsafe extern "C" fn(*mut c_void),
     api_key_index: i32,
@@ -90,10 +90,10 @@ pub fn init(
         ) -> SignedTxResponse> =
             lib.get(b"SignCreateOrder")
                 .map_err(|e| LighterError::FfiError(format!("Symbol SignCreateOrder not found: {}", e)))?;
-        let sign_cancel_order: Symbol<unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse> =
+        let sign_cancel_order: Symbol<unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse> =
             lib.get(b"SignCancelOrder")
                 .map_err(|e| LighterError::FfiError(format!("Symbol SignCancelOrder not found: {}", e)))?;
-        let sign_cancel_all_orders: Symbol<unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse> =
+        let sign_cancel_all_orders: Symbol<unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse> =
             lib.get(b"SignCancelAllOrders")
                 .map_err(|e| LighterError::FfiError(format!("Symbol SignCancelAllOrders not found: {}", e)))?;
         let create_auth_token_fn: Symbol<unsafe extern "C" fn(c_longlong, c_int, c_longlong) -> StrOrErr> =
@@ -215,12 +215,18 @@ pub fn sign_cancel_order(
     nonce: i64,
 ) -> Result<(u8, String), LighterError> {
     let signer = get_signer()?;
+    let expired_at = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64)
+        + 10 * 60 * 1000;
 
     unsafe {
         let resp = (signer.sign_cancel_order)(
             market_index,
             order_index as c_longlong,
             nonce as c_longlong,
+            expired_at as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
         );
@@ -245,6 +251,11 @@ pub fn sign_cancel_all_orders(
     nonce: i64,
 ) -> Result<(u8, String), LighterError> {
     let signer = get_signer()?;
+    let expired_at = (std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_millis() as i64)
+        + 10 * 60 * 1000;
 
     unsafe {
         // Pass 0 for cancelAllTime (nil = cancel immediately)
@@ -252,6 +263,7 @@ pub fn sign_cancel_all_orders(
             0, // timeInForce
             0, // cancelAllTime = nil (0 means cancel now)
             nonce as c_longlong,
+            expired_at as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
         );
