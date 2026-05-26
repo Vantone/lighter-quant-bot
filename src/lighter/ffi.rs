@@ -251,19 +251,15 @@ pub fn sign_cancel_all_orders(
     nonce: i64,
 ) -> Result<(u8, String), LighterError> {
     let signer = get_signer()?;
-    let expired_at = (std::time::SystemTime::now()
-        .duration_since(std::time::UNIX_EPOCH)
-        .unwrap()
-        .as_millis() as i64)
-        + 10 * 60 * 1000;
 
     unsafe {
-        // Pass 0 for cancelAllTime (nil = cancel immediately)
+        // Signature order is timeInForce, time, cancelAllTime, nonce, apiKeyIndex, accountIndex.
+        // Pass 0 for time/cancelAllTime to cancel immediately.
         let resp = (signer.sign_cancel_all_orders)(
             0, // timeInForce
+            0, // time
             0, // cancelAllTime = nil (0 means cancel now)
             nonce as c_longlong,
-            expired_at as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
         );
