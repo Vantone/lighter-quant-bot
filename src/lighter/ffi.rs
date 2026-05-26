@@ -29,7 +29,7 @@ struct SignerLib {
     create_client: unsafe extern "C" fn(*mut c_char, *mut c_char, c_int, c_int, c_longlong) -> *mut c_char,
     sign_create_order: unsafe extern "C" fn(
         c_int, c_longlong, c_longlong, c_int, c_int, c_int, c_int, c_int, c_int,
-        c_longlong, c_longlong, c_int, c_int, c_longlong, c_int, c_longlong,
+        c_longlong, c_longlong, c_int, c_int, c_int, c_longlong, c_int, c_longlong,
     ) -> SignedTxResponse,
     sign_cancel_order: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
     sign_cancel_all_orders: unsafe extern "C" fn(c_int, c_longlong, c_longlong, c_int, c_longlong) -> SignedTxResponse,
@@ -86,7 +86,7 @@ pub fn init(
                 .map_err(|e| LighterError::FfiError(format!("Symbol CreateClient not found: {}", e)))?;
         let sign_create_order: Symbol<unsafe extern "C" fn(
             c_int, c_longlong, c_longlong, c_int, c_int, c_int, c_int, c_int, c_int,
-            c_longlong, c_longlong, c_int, c_int, c_longlong, c_int, c_longlong,
+            c_longlong, c_longlong, c_int, c_int, c_int, c_longlong, c_int, c_longlong,
         ) -> SignedTxResponse> =
             lib.get(b"SignCreateOrder")
                 .map_err(|e| LighterError::FfiError(format!("Symbol SignCreateOrder not found: {}", e)))?;
@@ -188,6 +188,7 @@ pub fn sign_create_order(
             no_integrator as c_longlong,
             0, // integratorTakerFee
             0, // integratorMakerFee
+            0, // skipNonce
             nonce as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
@@ -272,10 +273,11 @@ pub fn sign_cancel_all_orders(
 #[allow(dead_code)]
 pub fn create_auth_token(deadline_secs: i64) -> Result<String, LighterError> {
     let signer = get_signer()?;
+    let deadline_ms = deadline_secs.saturating_mul(1000);
 
     unsafe {
         let resp = (signer.create_auth_token)(
-            deadline_secs as c_longlong,
+            deadline_ms as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
         );
