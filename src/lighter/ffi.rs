@@ -273,11 +273,10 @@ pub fn sign_cancel_all_orders(
 #[allow(dead_code)]
 pub fn create_auth_token(deadline_secs: i64) -> Result<String, LighterError> {
     let signer = get_signer()?;
-    let deadline_ms = deadline_secs.saturating_mul(1000);
 
     unsafe {
         let resp = (signer.create_auth_token)(
-            deadline_ms as c_longlong,
+            deadline_secs as c_longlong,
             signer.api_key_index,
             signer.account_index as c_longlong,
         );
